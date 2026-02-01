@@ -78,3 +78,9 @@ def get_settings() -> Settings:
     if _settings is None:
         _settings = Settings()
     return _settings
+
+
+def reset_settings() -> None:
+    """Reseta o cache de settings (força reload do .env)."""
+    global _settings
+    _settings = None

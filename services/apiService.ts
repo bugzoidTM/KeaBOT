@@ -18,15 +18,48 @@ export interface ToolEvent {
     is_skill?: boolean;
 }
 
+export interface ApprovalRequest {
+    approval_id: string;
+    tool_name: string;
+    arguments: Record<string, unknown>;
+}
+
 export interface ChatStreamCallbacks {
     onContent: (text: string) => void;
     onToolStart: (event: ToolEvent) => void;
     onToolEnd: (event: ToolEvent) => void;
     onSkillActivated: (event: ToolEvent) => void;
+    onApprovalRequired: (request: ApprovalRequest) => void;
     onDone: (data: { visited_files: string[]; activated_skills: string[]; tool_calls: number }) => void;
     onError: (error: string) => void;
     onSession: (sessionId: string) => void;
 }
+
+// ... (interfaces BackendSkill, ChatResponse unchanged) ...
+
+// ... (sendMessageStream implementation) ...
+
+
+// ... (rest of switch) ...
+
+// ... (API Functions) ...
+
+/**
+ * Aprova uma ação pendente.
+ */
+export async function approveAction(reqId: string): Promise<void> {
+    await fetch(`${API_BASE_URL}/api/approval/${reqId}/approve`, { method: 'POST' });
+}
+
+/**
+ * Rejeita uma ação pendente.
+ */
+export async function rejectAction(reqId: string): Promise<void> {
+    await fetch(`${API_BASE_URL}/api/approval/${reqId}/reject`, { method: 'POST' });
+}
+
+// ... (existing updateConfig) ...
+
 
 export interface BackendSkill {
     name: string;
@@ -154,6 +187,14 @@ export async function sendMessageStream(
                                     type: 'skill_activated',
                                     name: data.name,
                                     success: data.success,
+                                });
+                                break;
+
+                            case 'approval_required':
+                                callbacks.onApprovalRequired({
+                                    approval_id: data.approval_id,
+                                    tool_name: data.tool_name,
+                                    arguments: data.arguments
                                 });
                                 break;
 

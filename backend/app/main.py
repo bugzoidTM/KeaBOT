@@ -27,22 +27,31 @@ async def lifespan(app: FastAPI):
     
     # Import tools to trigger registration
     import app.tools.filesystem  # noqa: F401
+    import app.tools.browser     # noqa: F401
     
     # Initialize Skills System
     from app.skills import init_skills
     _skill_manager = init_skills()
+    
+    # Initialize Scheduler
+    from app.services.scheduler import get_scheduler
+    scheduler = get_scheduler()
+    scheduler.start()
     
     settings = get_settings()
     print("[KeaBot] Backend iniciado!")
     print(f"   Provider: {settings.llm_provider}")
     print(f"   Allowed paths: {settings.keabot_allowed_paths}")
     print(f"   Skills loaded: {len(_skill_manager.skills)}")
+    print(f"   Scheduler active: True")
     
     yield
     
     # Shutdown
     if _skill_manager:
         _skill_manager.stop_file_watcher()
+    
+    scheduler.shutdown()
     print("[KeaBot] Backend encerrado.")
 
 

@@ -86,9 +86,23 @@ class GeminiProvider(LLMProvider):
         # Inicia chat
         chat = model.start_chat(history=gemini_messages[:-1] if len(gemini_messages) > 1 else [])
         
-        # Envia última mensagem
+        # Envia última mensagem com retry para rate limits
         last_message = gemini_messages[-1] if gemini_messages else {"parts": [{"text": ""}]}
-        response = await chat.send_message_async(last_message)
+        
+        import asyncio
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = await chat.send_message_async(last_message)
+                return self._parse_response(response)
+            except Exception as e:
+                error_str = str(e).lower()
+                if "429" in str(e) or "quota" in error_str or "rate" in error_str:
+                    if attempt < max_retries - 1:
+                        wait_time = (attempt + 1) * 5  # 5s, 10s, 15s
+                        await asyncio.sleep(wait_time)
+                        continue
+                raise
         
         return self._parse_response(response)
     

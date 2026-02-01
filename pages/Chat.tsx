@@ -96,9 +96,9 @@ const ChatPage: React.FC = () => {
 
     try {
       await sendMessageStream(userText, {
-        onContent: (text) => {
+        onContent: (chunk) => {
           setMessages(prev => prev.map(msg =>
-            msg.id === modelMsgId ? { ...msg, text } : msg
+            msg.id === modelMsgId ? { ...msg, text: (msg.text || '') + chunk } : msg
           ));
         },
         onToolStart: (event) => {
@@ -109,6 +109,9 @@ const ChatPage: React.FC = () => {
         },
         onSkillActivated: (event) => {
           setAgentActivities(prev => [...prev, event]);
+        },
+        onApprovalRequired: (req) => {
+          setPendingApproval(req);
         },
         onDone: (data) => {
           console.log('Chat done:', data);
@@ -151,6 +154,27 @@ const ChatPage: React.FC = () => {
     }
   };
 
+  // Approval state
+  const [pendingApproval, setPendingApproval] = useState<import('../services/apiService').ApprovalRequest | null>(null);
+
+  const handleApprove = async (id: string) => {
+    try {
+      await import('../services/apiService').then(m => m.approveAction(id));
+      setPendingApproval(null);
+    } catch (e) {
+      console.error("Failed to approve", e);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      await import('../services/apiService').then(m => m.rejectAction(id));
+      setPendingApproval(null);
+    } catch (e) {
+      console.error("Failed to reject", e);
+    }
+  };
+
   const handleClearChat = () => {
     setMessages([{
       id: 'init-clear',
@@ -160,6 +184,7 @@ const ChatPage: React.FC = () => {
     }]);
     setSessionId(undefined);
     setAgentActivities([]);
+    setPendingApproval(null);
   };
 
   return (
@@ -174,10 +199,10 @@ const ChatPage: React.FC = () => {
             <h2 className="text-base font-bold leading-tight tracking-tight flex items-center gap-2">
               KeaBOT v4
               <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${backendStatus === 'online'
-                  ? 'bg-emerald-500/10 text-emerald-500 ring-emerald-500/20'
-                  : backendStatus === 'offline'
-                    ? 'bg-red-500/10 text-red-500 ring-red-500/20'
-                    : 'bg-yellow-500/10 text-yellow-500 ring-yellow-500/20'
+                ? 'bg-emerald-500/10 text-emerald-500 ring-emerald-500/20'
+                : backendStatus === 'offline'
+                  ? 'bg-red-500/10 text-red-500 ring-red-500/20'
+                  : 'bg-yellow-500/10 text-yellow-500 ring-yellow-500/20'
                 }`}>
                 {backendStatus === 'online' ? 'Online' : backendStatus === 'offline' ? 'Offline' : 'Checking...'}
               </span>
@@ -193,8 +218,8 @@ const ChatPage: React.FC = () => {
             <button
               onClick={() => setLlmProvider('gemini')}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${llmProvider === 'gemini'
-                  ? 'bg-primary text-white'
-                  : 'text-[#92adc9] hover:text-white'
+                ? 'bg-primary text-white'
+                : 'text-[#92adc9] hover:text-white'
                 }`}
             >
               Gemini
@@ -202,8 +227,8 @@ const ChatPage: React.FC = () => {
             <button
               onClick={() => setLlmProvider('openai')}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${llmProvider === 'openai'
-                  ? 'bg-primary text-white'
-                  : 'text-[#92adc9] hover:text-white'
+                ? 'bg-primary text-white'
+                : 'text-[#92adc9] hover:text-white'
                 }`}
             >
               OpenAI
@@ -291,6 +316,53 @@ const ChatPage: React.FC = () => {
         </div>
       </div>
 
+
+
+      {/* Approval Request Card */}
+      {
+        pendingApproval && (
+          <div className="absolute bottom-24 left-0 right-0 z-50 px-4 flex justify-center animate-in slide-in-from-bottom-5 fade-in duration-300">
+            <div className="bg-[#1c2a38] border border-yellow-500/30 rounded-xl shadow-2xl p-4 max-w-2xl w-full flex flex-col gap-3 ring-1 ring-yellow-500/20 backdrop-blur-xl">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-yellow-500/10 rounded-lg text-yellow-500 shrink-0">
+                    <span className="material-symbols-outlined text-[20px]">warning</span>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Action Approval Required</h3>
+                    <p className="text-xs text-[#92adc9] mt-0.5">The agent wants to execute a sensitive action.</p>
+                  </div>
+                </div>
+                <span className="px-2 py-1 bg-[#101922] rounded text-[10px] font-mono text-gray-400 border border-[#233648]">
+                  {pendingApproval.tool_name}
+                </span>
+              </div>
+
+              <div className="bg-[#101922]/50 rounded-lg p-2 font-mono text-[11px] text-[#92adc9] border border-[#233648] max-h-32 overflow-y-auto whitespace-pre-wrap">
+                {JSON.stringify(pendingApproval.arguments, null, 2)}
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => handleReject(pendingApproval.approval_id)}
+                  className="flex-1 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-bold rounded-lg border border-red-500/20 transition-all flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[16px]">block</span>
+                  Deny
+                </button>
+                <button
+                  onClick={() => handleApprove(pendingApproval.approval_id)}
+                  className="flex-1 px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 text-xs font-bold rounded-lg border border-emerald-500/20 transition-all flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                  Approve
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
       {/* Input Area */}
       <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#101922] via-[#101922] to-transparent pointer-events-none z-20">
         <div className="max-w-[800px] mx-auto pointer-events-auto">
@@ -332,7 +404,7 @@ const ChatPage: React.FC = () => {
           </div>
         </div>
       </div>
-    </main>
+    </main >
   );
 };
 

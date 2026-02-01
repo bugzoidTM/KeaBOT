@@ -164,6 +164,8 @@ class Agent:
                 system_prompt=system_prompt
             )
             
+            print(f"[Agent] LLM Response: content={response.get('content', '')[:100]}, tool_calls={len(response.get('tool_calls', []))}")
+            
             # Se houver tool calls, executa
             if response.get("tool_calls"):
                 state.tool_call_count += len(response["tool_calls"])
@@ -303,6 +305,7 @@ class Agent:
                         }
                     }
                     
+
                     # Verifica se é skill
                     if self._is_skill_call(tool_name):
                         result = await self._handle_skill_activation(tool_call, state)
@@ -314,10 +317,42 @@ class Agent:
                             }
                         }
                     else:
-                        result = await self.tools.execute(
-                            tool_name,
-                            **tool_call["arguments"]
-                        )
+                        # Safety Check
+                        sensitive_tools = ["write_to_file", "replace_file_content", "run_command", "delete_file"]
+                        approved = True
+                        
+                        if tool_name in sensitive_tools:
+                            from app.services.approval import get_approval_service
+                            approval_service = get_approval_service()
+                            req_id = approval_service.create_request()
+                            
+                            yield {
+                                "type": "approval_required",
+                                "data": {
+                                    "approval_id": req_id,
+                                    "tool_name": tool_name,
+                                    "arguments": tool_call["arguments"]
+                                }
+                            }
+                            
+                            # Aguarda aprovação
+                            approved = await approval_service.wait_for_approval(req_id)
+                        
+                        if approved:
+                            result = await self.tools.execute(
+                                tool_name,
+                                **tool_call["arguments"]
+                            )
+                        else:
+                            result = ToolResult(
+                                success=False,
+                                error="Ação rejeitada pelo usuário ou timeout."
+                            )
+                            # Avisa frontend que foi rejeitado/cancelado
+                            yield {
+                                "type": "error",
+                                "data": "Ação cancelada pelo usuário."
+                            }
                     
                     if tool_name in ["read_file_chunk", "file_stats"]:
                         path = tool_call["arguments"].get("path", "")

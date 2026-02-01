@@ -311,6 +311,85 @@ def get_runtime_model() -> str | None:
     return _runtime_config.get("model")
 
 
+
+class ScheduleRequest(BaseModel):
+    """Requisição de agendamento."""
+    instruction: str
+    name: str = "Scheduled Task"
+
+
+@router.post("/schedule")
+async def schedule_task(request: ScheduleRequest):
+    """
+    Cria um novo agendamento usando LLM para parsear cron.
+    """
+    # 1. Usa LLM para converter instrução em CRON
+    from app.config import get_settings
+    from app.agent.llm import get_provider
+    import re
+    
+    settings = get_settings()
+    provider = get_provider(settings.llm_provider)
+    
+    prompt = f"""
+    Converta a seguinte instrução de agendamento para uma expressão CRON padrão (5 campos).
+    Instrução: "{request.instruction}"
+    
+    Responda APENAS a expressão cron. Exemplo: "0 9 * * *"
+    Se não conseguir entender, responda "ERROR".
+    """
+    
+    response = await provider.chat(
+        messages=[{"role": "user", "content": prompt}],
+        tools=[],
+        system_prompt="You are a system scheduler helper."
+    )
+    
+    cron_expr = response["content"].strip().replace('`', '')
+    
+    if "ERROR" in cron_expr or len(cron_expr.split()) < 5:
+        raise HTTPException(status_code=400, detail="Não consegui entender a frequência de agendamento.")
+    
+    # 2. Agenda o job
+    from app.services.scheduler import get_scheduler
+    scheduler = get_scheduler()
+    
+    try:
+        job_id = await scheduler.add_job(
+            name=request.name,
+            instruction=request.instruction,
+            schedule=cron_expr
+        )
+        return {
+            "success": True,
+            "job_id": job_id,
+            "schedule": cron_expr,
+            "message": f"Tarefa agendada: {cron_expr}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/approval/{req_id}/approve")
+async def approve_request(req_id: str):
+    """Aprova uma solicitação de ação sensível."""
+    from app.services.approval import get_approval_service
+    get_approval_service().approve(req_id)
+    return {"success": True}
+
+
+@router.post("/approval/{req_id}/reject")
+async def reject_request(req_id: str):
+    """Rejeita uma solicitação de ação sensível."""
+    from app.services.approval import get_approval_service
+    get_approval_service().reject(req_id)
+    return {"success": True}
+
+
 @router.get("/health")
 async def health_check():
     """Health check endpoint."""

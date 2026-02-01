@@ -71,103 +71,65 @@ KeaBot é um **Agente de Automação Local** que combina uma interface React mod
 
 ---
 
-## 🚀 Plano de Implementação
+## 🚀 Implementação (Concluída)
 
-O desenvolvimento será feito em **4 Etapas**:
+O sistema atingiu a **Etapa 4** (Versão 4.0):
 
-### Etapa 1: Core do Backend
-> *Fundação do sistema*
+### Etapa 1: Core do Backend ✅
+- [x] Estrutura FastAPI com WebSocket
+- [x] Sistema de Tools básico (filesystem, shell)
+- [x] Integração com Gemini/OpenAI API
+- [x] Loop ReAct simples
 
-- [ ] Estrutura FastAPI com WebSocket
-- [ ] Sistema de Tools básico (filesystem, shell)
-- [ ] Integração com Gemini/OpenAI API
-- [ ] Loop ReAct simples (Thought → Action → Observation)
+### Etapa 2: Safety Layer + Context Manager ✅
+- [x] Classificação de ações (safe/unsafe)
+- [x] Approval flow via WebSocket/SSE
+- [x] Context window infinito com chunking
+- [x] Working memory persistente
 
-### Etapa 2: Safety Layer + Context Manager
-> *Segurança e memória*
+### Etapa 3: Skills System ✅
+- [x] Parser de Skills (.md)
+- [x] Hot-reload de skills
+- [x] Skills built-in (git, docker, npm)
 
-- [ ] Classificação de ações (safe/unsafe)
-- [ ] Approval flow via WebSocket
-- [ ] Context window infinito com chunking
-- [ ] Working memory persistente
-
-### Etapa 3: Skills System
-> *Extensibilidade*
-
-- [ ] Parser de Skills (.md)
-- [ ] Hot-reload de skills
-- [ ] Skills built-in (git, docker, npm, etc.)
-- [ ] Skill discovery automático
-
-### Etapa 4: Integração Frontend
-> *Conexão com React UI*
-
-- [ ] Streaming de mensagens (SSE)
-- [ ] File browser integrado
-- [ ] Terminal embutido
-- [ ] Status de aprovação em tempo real
-
----
-
-## 📁 Estrutura do Projeto (Planejada)
-
-```
-KeaBOT/
-├── backend/                    # 🐍 Python Backend
-│   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py             # FastAPI entry point
-│   │   ├── agent/
-│   │   │   ├── core.py         # ReAct loop
-│   │   │   ├── context.py      # Context manager
-│   │   │   └── safety.py       # Safety layer
-│   │   ├── tools/
-│   │   │   ├── base.py         # Tool base class
-│   │   │   ├── filesystem.py   # ls, cat, read_chunk
-│   │   │   ├── shell.py        # Execute commands
-│   │   │   └── code.py         # grep, ast parsing
-│   │   ├── skills/
-│   │   │   └── loader.py       # Skill parser
-│   │   └── api/
-│   │       ├── routes.py       # REST endpoints
-│   │       └── websocket.py    # Real-time communication
-│   ├── skills/                 # 📚 Skill files (.md)
-│   │   ├── git.md
-│   │   ├── docker.md
-│   │   └── debugging.md
-│   ├── requirements.txt
-│   └── pyproject.toml
-│
-├── src/                        # ⚛️ React Frontend (existente)
-│   ├── components/
-│   ├── pages/
-│   └── services/
-│
-├── .env.local                  # API keys
-└── README.md                   # Este arquivo
-```
+### Etapa 4: Integração Frontend & Advanced Features ✅
+- [x] Streaming de mensagens (SSE)
+- [x] Browser Tool (Playwright)
+- [x] Scheduler (Agendamento de tarefas)
+- [x] Docker Containerization
 
 ---
 
 ## ⚡ Quick Start
 
 ### Pré-requisitos
-- **Node.js** >= 18
-- **Python** >= 3.11
-- **Gemini API Key** ou **OpenAI API Key**
+- **Docker** (Recomendado)
+- Ou: **Node.js** >= 18 + **Python** >= 3.11
+- **Gemini API Key**
 
-### Frontend (Existente)
+### 🐳 Via Docker (Recomendado)
+```bash
+# Crie o arquivo .env na raiz (ou altere docker-compose.yml)
+# Execute:
+docker-compose up --build
+```
+Acesse: `http://localhost:3000`
+
+### Manual Setup
+
+#### Frontend
 ```bash
 npm install
 npm run dev
 ```
 
-### Backend (Após Etapa 1)
+#### Backend
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+python -m venv .venv
+.\.venv\Scripts\activate  # Windows
 pip install -r requirements.txt
+playwright install
 uvicorn app.main:app --reload
 ```
 

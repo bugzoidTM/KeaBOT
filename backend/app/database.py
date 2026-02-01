@@ -79,18 +79,33 @@ class VisitedFile(Base):
 # Database engine and session
 _engine = None
 _async_session_maker = None
+AsyncSessionLocal = None  # Global access for services
 
 
 async def init_db():
     """Inicializa o banco de dados."""
-    global _engine, _async_session_maker
+    global _engine, _async_session_maker, AsyncSessionLocal
     
     settings = get_settings()
     _engine = create_async_engine(settings.database_url, echo=False)
     _async_session_maker = async_sessionmaker(_engine, expire_on_commit=False)
+    AsyncSessionLocal = _async_session_maker
     
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+
+class Job(Base):
+    """Tabela de agendamentos (Cron)."""
+    __tablename__ = "jobs"
+    
+    id = Column(String(36), primary_key=True)
+    name = Column(String(200), nullable=False)
+    instruction = Column(Text, nullable=False)
+    schedule = Column(String(100), nullable=False) # Cron expression
+    next_run = Column(DateTime, nullable=True)
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 async def get_db() -> AsyncSession:

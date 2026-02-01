@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: keabot_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.0-flash-exp}
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/skills:/app/skills
+      - ./backend/data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build: .
+    container_name: keabot_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
