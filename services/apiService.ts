@@ -68,6 +68,7 @@ export interface BackendSkill {
     author?: string;
     version?: string;
     is_loaded: boolean;
+    slug?: string;
 }
 
 export interface ChatResponse {
@@ -294,6 +295,70 @@ export async function healthCheck(): Promise<{ status: string; service: string }
 
     if (!response.ok) {
         throw new Error('Backend not available');
+    }
+
+    return response.json();
+}
+
+export interface SkillRequest {
+    name: string;
+    content: string;
+    description?: string;
+}
+
+/**
+ * Carrega o conteúdo completo de uma skill.
+ */
+export async function getSkill(slug: string): Promise<{
+    name: string;
+    description: string;
+    content: string;
+    slug: string;
+}> {
+    const response = await fetch(`${API_BASE_URL}/api/skills/${slug}`);
+
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return response.json();
+}
+
+/**
+ * Salva (cria ou atualiza) uma skill.
+ */
+export async function saveSkill(skill: SkillRequest): Promise<{
+    success: boolean;
+    message: string;
+}> {
+    const response = await fetch(`${API_BASE_URL}/api/skills`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(skill),
+    });
+
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return response.json();
+}
+
+/**
+ * Remove uma skill.
+ */
+export async function deleteSkill(slug: string): Promise<{
+    success: boolean;
+    message: string;
+}> {
+    const response = await fetch(`${API_BASE_URL}/api/skills/${slug}`, {
+        method: 'DELETE',
+    });
+
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
     return response.json();

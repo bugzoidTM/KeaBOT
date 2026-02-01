@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getConfig, updateConfig } from '../services/apiService';
 
 // Simplified provider type for actual backend
-type Provider = 'gemini' | 'openai';
+type Provider = 'gemini' | 'openai' | 'anthropic' | 'deepseek';
 
 interface ConfigState {
   provider: Provider;
@@ -83,20 +83,51 @@ const SettingsPage: React.FC = () => {
   };
 
   const providers = [
-    { id: 'gemini' as Provider, name: 'Google Gemini', desc: 'Gemini 2.5 Flash', icon: 'grid_view' },
-    { id: 'openai' as Provider, name: 'OpenAI', desc: 'GPT-4o', icon: 'auto_awesome', disabled: true },
+    { id: 'gemini' as Provider, name: 'Google Gemini', desc: 'Models: 2.0 Flash, 2.5 Pro', icon: 'grid_view' },
+    { id: 'openai' as Provider, name: 'OpenAI', desc: 'GPT-4o, GPT-4o Mini', icon: 'auto_awesome' },
+    { id: 'anthropic' as Provider, name: 'Anthropic', desc: 'Claude 3.5 Sonnet, Haiku', icon: 'psychology', disabled: true },
+    { id: 'deepseek' as Provider, name: 'DeepSeek', desc: 'DeepSeek V3/R1', icon: 'code_blocks' },
   ];
 
-  const models = config.provider === 'gemini'
-    ? [
-      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Recomendado)' },
-      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
-    ]
-    : [
-      { id: 'gpt-4o', name: 'GPT-4o' },
-      { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-    ];
+  const getModelsForProvider = (provider: Provider) => {
+    switch (provider) {
+      case 'gemini':
+        return [
+          { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Recomendado)' },
+          { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
+          { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+        ];
+      case 'openai':
+        return [
+          { id: 'gpt-4o', name: 'GPT-4o' },
+          { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
+        ];
+      case 'anthropic':
+        return [
+          { id: 'claude-3-5-sonnet-20240620', name: 'Claude 3.5 Sonnet' },
+          { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku' },
+        ];
+      case 'deepseek':
+        return [
+          { id: 'deepseek-chat', name: 'DeepSeek V3' },
+          { id: 'deepseek-reasoner', name: 'DeepSeek R1 (Reasoner)' },
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const models = getModelsForProvider(config.provider);
+
+  const getApiKeyHelpText = (provider: Provider) => {
+    switch (provider) {
+      case 'gemini': return 'Obtenha sua chave em: https://aistudio.google.com/';
+      case 'openai': return 'Obtenha sua chave em: https://platform.openai.com/';
+      case 'anthropic': return 'Obtenha sua chave em: https://console.anthropic.com/';
+      case 'deepseek': return 'Obtenha sua chave em: https://platform.deepseek.com/';
+      default: return '';
+    }
+  };
 
   if (isLoading) {
     return (
@@ -139,8 +170,8 @@ const SettingsPage: React.FC = () => {
           {/* Message */}
           {message && (
             <div className={`p-4 rounded-lg border ${message.type === 'success'
-                ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                : 'bg-red-500/10 border-red-500/30 text-red-400'
+              ? 'bg-green-500/10 border-green-500/30 text-green-400'
+              : 'bg-red-500/10 border-red-500/30 text-red-400'
               }`}>
               {message.text}
             </div>
@@ -148,8 +179,8 @@ const SettingsPage: React.FC = () => {
 
           {/* API Key Status */}
           <div className={`p-4 rounded-lg border ${config.hasApiKey
-              ? 'bg-green-500/10 border-green-500/30'
-              : 'bg-yellow-500/10 border-yellow-500/30'
+            ? 'bg-green-500/10 border-green-500/30'
+            : 'bg-yellow-500/10 border-yellow-500/30'
             }`}>
             <div className="flex items-center gap-3">
               <span className={`material-symbols-outlined ${config.hasApiKey ? 'text-green-400' : 'text-yellow-400'}`}>
@@ -218,7 +249,9 @@ const SettingsPage: React.FC = () => {
             </h3>
             <div className="flex flex-col gap-2">
               <label className="text-text-secondary text-sm font-medium">
-                {config.provider === 'gemini' ? 'Gemini API Key' : 'OpenAI API Key'}
+                {config.provider === 'gemini' ? 'Gemini API Key' :
+                  config.provider === 'openai' ? 'OpenAI API Key' :
+                    config.provider === 'anthropic' ? 'Anthropic API Key' : 'DeepSeek API Key'}
               </label>
               <div className="relative flex items-center">
                 <span className="absolute left-3 material-symbols-outlined text-text-secondary">key</span>
@@ -239,9 +272,7 @@ const SettingsPage: React.FC = () => {
                 </button>
               </div>
               <p className="text-xs text-text-secondary mt-1">
-                {config.provider === 'gemini'
-                  ? 'Obtenha sua chave em: https://aistudio.google.com/'
-                  : 'Obtenha sua chave em: https://platform.openai.com/'}
+                {getApiKeyHelpText(config.provider)}
               </p>
             </div>
           </div>

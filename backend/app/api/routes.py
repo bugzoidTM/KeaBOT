@@ -395,3 +395,93 @@ async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "keabot-backend"}
 
+
+# --- Skills Management ---
+
+class SkillRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    content: str
+    description: Optional[str] = ""
+
+@router.get("/skills")
+async def list_skills():
+    """Lista todas as skills (resumo)."""
+    from app.main import get_skill_manager
+    manager = get_skill_manager()
+    
+    # Force reload to ensure file sync
+    # manager.reload_skills() # Too heavy? Maybe
+    
+    return {
+        "skills": [
+            {
+                "name": s.name,
+                "description": s.description,
+                "author": s.author,
+                "version": s.version,
+                "is_loaded": s.is_loaded,
+                "slug": s._slug(),
+                "triggers": s.triggers
+            }
+            for s in manager.skills.values()
+        ]
+    }
+
+@router.get("/skills/{slug}")
+async def get_skill(slug: str):
+    """Retorna conteúdo completo de uma skill."""
+    from app.main import get_skill_manager
+    manager = get_skill_manager()
+    
+    # Busca skill por slug
+    target_skill = None
+    for s in manager.skills.values():
+        if s._slug() == slug:
+            target_skill = s
+            break
+            
+    if not target_skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    
+    # Garante que conteúdo está carregado
+    manager.load_skill_content(target_skill)
+    
+    return {
+        "name": target_skill.name,
+        "description": target_skill.description,
+        "content": target_skill.content,
+        "file_path": str(target_skill.file_path),
+        "triggers": target_skill.triggers,
+        "slug": target_skill._slug()
+    }
+
+@router.post("/skills")
+async def save_skill(request: SkillRequest):
+    """Cria ou atualiza uma skill."""
+    from app.main import get_skill_manager
+    manager = get_skill_manager()
+    
+    success = manager.save_skill(request.name, request.content)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to save skill")
+    
+    return {"success": True, "message": f"Skill '{request.name}' salva com sucesso."}
+
+@router.delete("/skills/{slug}")
+async def delete_skill(slug: str):
+    """Exclui uma skill."""
+    from app.main import get_skill_manager
+    manager = get_skill_manager()
+    
+    success = manager.delete_skill(slug)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to delete skill")
+    
+    return {"success": True, "message": "Skill excluída com sucesso."}
+
+@router.post("/skills/reload")
+async def reload_skills_endpoint():
+    from app.main import get_skill_manager
+    get_skill_manager().reload_skills()
+    return {"success": True}
+

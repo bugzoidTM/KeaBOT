@@ -5,26 +5,7 @@ Prompts otimizados para uso correto das ferramentas e skills.
 
 SYSTEM_PROMPT_BASE = """Você é o **KeaBot** 🦜, um assistente de automação local para desenvolvedores.
 
-## 💬 COMPORTAMENTO
-
-- Responda em **português brasileiro** de forma clara e objetiva
-- Quando o usuário pedir algo, **EXECUTE IMEDIATAMENTE** usando suas ferramentas
-- **SEMPRE mostre os resultados** das ferramentas ao usuário de forma organizada
-- Seja proativo: se listou arquivos, mostre-os; se buscou código, apresente-o
-
-## 🎯 QUANDO O USUÁRIO PEDIR ALGO
-
-1. **NÃO pergunte "o que você quer?"** - Execute a ação diretamente
-2. Use as ferramentas apropriadas e **mostre os resultados**
-3. Formate a saída de forma legível (use listas, código, tabelas quando apropriado)
-
-**Exemplo correto:**
-- Usuário: "liste os arquivos"
-- Você: chama `list_directory(".")` e MOSTRA o resultado formatado
-
-**Exemplo errado:**
-- Usuário: "liste os arquivos"  
-- Você: "O que você gostaria de explorar?" ❌ (Não faça isso!)
+{identity_section}
 
 ## 🛠️ Ferramentas Disponíveis
 
@@ -59,12 +40,13 @@ A tarefa solicitada foi: {user_query}
 """
 
 
-def get_system_prompt(skills_summary: str = "") -> str:
+def get_system_prompt(skills_summary: str = "", identity_content: str = "") -> str:
     """
-    Retorna o system prompt com skills injetadas.
+    Retorna o system prompt com skills e identidade injetadas.
     
     Args:
-        skills_summary: Resumo das skills disponíveis (nomes e descrições apenas)
+        skills_summary: Resumo das skills disponíveis
+        identity_content: Conteúdo da skill de Identidade (opcional)
     """
     if skills_summary:
         skills_section = f"""
@@ -78,7 +60,23 @@ Quando você ativa uma skill, receberá instruções detalhadas de como proceder
     else:
         skills_section = ""
     
-    return SYSTEM_PROMPT_BASE.format(skills_section=skills_section)
+    # Default behavior if no identity provided
+    if not identity_content:
+        identity_section = """
+## 💬 COMPORTAMENTO
+
+- Responda em **português brasileiro** de forma clara e objetiva
+- Quando o usuário pedir algo, **EXECUTE IMEDIATAMENTE** usando suas ferramentas
+- **SEMPRE mostre os resultados** das ferramentas ao usuário de forma organizada
+- Seja proativo: se listou arquivos, mostre-os; se buscou código, apresente-o
+"""
+    else:
+        identity_section = identity_content
+
+    return SYSTEM_PROMPT_BASE.format(
+        identity_section=identity_section,
+        skills_section=skills_section
+    )
 
 
 def get_skill_injection_prompt(skill_name: str, skill_content: str, user_query: str) -> str:

@@ -283,6 +283,62 @@ class SkillManager:
         self.skills.clear()
         self.scan_skills()
         self.register_skills_as_tools()
+    
+    def save_skill(self, name: str, content: str) -> bool:
+        """
+        Salva uma skill em arquivo .md.
+        Se já existir, sobrescreve.
+        """
+        slug = re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
+        filename = f"{slug}.md"
+        file_path = self.skills_dir / filename
+        
+        try:
+            # Ensure proper markdown formatting if needed
+            # For now, trust that 'content' is the full markdown including YAML frontmatter
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            print(f"[SkillManager] Skill salva: {file_path}")
+            # Force reload to pick up changes immediately
+            self.reload_skills()
+            return True
+        except Exception as e:
+            print(f"[SkillManager] Erro ao salvar skill {name}: {e}")
+            return False
+
+    def delete_skill(self, slug: str) -> bool:
+        """Remove o arquivo de uma skill."""
+        # Find skill by slug
+        target_skill = None
+        for s in self.skills.values():
+            if s._slug() == slug:
+                target_skill = s
+                break
+        
+        if not target_skill or not target_skill.file_path:
+            # Try to construct path from slug as fallback
+            file_path = self.skills_dir / f"{slug}.md"
+            if file_path.exists():
+                try:
+                    os.remove(file_path)
+                    print(f"[SkillManager] Skill excluída por path fallback: {file_path}")
+                    self.reload_skills()
+                    return True
+                except Exception as e:
+                    print(f"[SkillManager] Erro ao excluir skill fallback {slug}: {e}")
+                    return False
+            return False
+            
+        try:
+            os.remove(target_skill.file_path)
+            print(f"[SkillManager] Skill excluída: {target_skill.file_path}")
+            del self.skills[target_skill.name]
+            self.reload_skills()
+            return True
+        except Exception as e:
+            print(f"[SkillManager] Erro ao excluir skill {slug}: {e}")
+            return False
 
 
 # Singleton

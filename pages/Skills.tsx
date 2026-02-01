@@ -14,6 +14,11 @@ const SkillsPage: React.FC = () => {
     { id: '3', name: 'Competitor Analysis', description: 'Scrape pricing pages weekly', status: 'paused', lastRun: '', schedule: 'Weekly' },
   ];
 
+  const [showModal, setShowModal] = useState(false);
+  const [editingSkill, setEditingSkill] = useState<BackendSkill | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formContent, setFormContent] = useState('');
+
   // Load skills from backend
   const loadSkills = async () => {
     try {
@@ -47,7 +52,64 @@ const SkillsPage: React.FC = () => {
     }
   };
 
+  const handleCreateSkill = () => {
+    setEditingSkill(null);
+    setFormName('');
+    setFormContent(`---
+name: New Skill
+description: Description here
+triggers: []
+---
+
+# Instructions
+Write your skill instructions here...`);
+    setShowModal(true);
+  };
+
+  const handleEditSkill = async (skill: BackendSkill) => {
+    try {
+      // Fetch content
+      const fullSkill = await import('../services/apiService').then(m => m.getSkill(skill.slug || ''));
+      setEditingSkill(skill);
+      setFormName(skill.name);
+      setFormContent(fullSkill.content);
+      setShowModal(true);
+    } catch (e) {
+      console.error("Failed to load skill content", e);
+      alert("Failed to load skill content");
+    }
+  };
+
+  const handleSaveSkill = async () => {
+    try {
+      await import('../services/apiService').then(m => m.saveSkill({
+        name: formName,
+        content: formContent
+      }));
+      setShowModal(false);
+      loadSkills();
+    } catch (e) {
+      console.error("Failed to save", e);
+      alert("Failed to save skill");
+    }
+  };
+
+  const handleDeleteSkill = async () => {
+    if (!editingSkill || !editingSkill.slug) return;
+    if (!confirm(`Are you sure you want to delete ${editingSkill.name}?`)) return;
+
+    try {
+      await import('../services/apiService').then(m => m.deleteSkill(editingSkill.slug!));
+      setShowModal(false);
+      loadSkills();
+    } catch (e) {
+      console.error("Failed to delete", e);
+      alert("Failed to delete skill");
+    }
+  };
+
   const getSkillIcon = (name: string): string => {
+    // ... existing logic ...
     const nameLower = name.toLowerCase();
     if (nameLower.includes('log') || nameLower.includes('clean')) return 'delete_sweep';
     if (nameLower.includes('file')) return 'folder';
@@ -94,7 +156,10 @@ const SkillsPage: React.FC = () => {
             </span>
             <span>{isReloading ? 'Recarregando...' : 'Reload Skills'}</span>
           </button>
-          <button className="flex items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold shadow-lg shadow-primary/20 hover:bg-blue-600 transition-colors">
+          <button
+            onClick={handleCreateSkill}
+            className="flex items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold shadow-lg shadow-primary/20 hover:bg-blue-600 transition-colors"
+          >
             <span className="material-symbols-outlined text-[20px]">add_circle</span>
             <span>Nova Skill</span>
           </button>
@@ -144,8 +209,8 @@ const SkillsPage: React.FC = () => {
                 <div
                   key={skill.name}
                   className={`group relative flex flex-col p-5 rounded-xl bg-white dark:bg-card-dark border ${skill.is_loaded
-                      ? 'border-primary/40 dark:border-primary/30 shadow-lg shadow-primary/5'
-                      : 'border-gray-200 dark:border-[#2f455a]'
+                    ? 'border-primary/40 dark:border-primary/30 shadow-lg shadow-primary/5'
+                    : 'border-gray-200 dark:border-[#2f455a]'
                     } transition-all duration-300 hover:scale-[1.01]`}
                 >
                   <div className="flex justify-between items-start mb-3">
@@ -192,20 +257,32 @@ const SkillsPage: React.FC = () => {
                   )}
 
                   {/* Status */}
-                  <div className="mt-auto pt-3">
+                  <div className="mt-auto pt-3 flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-medium text-primary">
                       <span className={`size-1.5 rounded-full ${skill.is_loaded ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
                       {skill.is_loaded ? 'Loaded' : 'Lazy'}
                     </div>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditSkill(skill);
+                      }}
+                      className="p-2 rounded-lg bg-gray-100 dark:bg-[#1a2632] hover:bg-gray-200 dark:hover:bg-[#233648] text-[#5a7690] hover:text-primary transition-all"
+                      title="Edit Skill"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">edit</span>
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          )
+          }
+        </div >
 
         {/* Right: Automations */}
-        <div className="xl:col-span-4 flex flex-col gap-6">
+        < div className="xl:col-span-4 flex flex-col gap-6" >
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-bold flex items-center gap-2">
               <span className="material-symbols-outlined text-green-500">schedule</span>
@@ -277,9 +354,88 @@ const SkillsPage: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </main>
+        </div >
+      </div >
+      {/* Modal for Creating/Editing Skill */}
+      {
+        showModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-[#1c2a38] border border-gray-200 dark:border-[#2f455a] rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-[#2f455a]">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                  {editingSkill ? `Edit ${editingSkill.name}` : 'Create New Skill'}
+                </h3>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white"
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Skill Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="e.g., Git Expert"
+                    disabled={!!editingSkill}
+                    className="w-full bg-white dark:bg-[#101922] border border-gray-300 dark:border-[#2f455a] rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary outline-none transition-all"
+                  />
+                </div>
+
+                <div className="flex-1 flex flex-col">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Markdown Content (Frontmatter + Instructions)
+                  </label>
+                  <textarea
+                    value={formContent}
+                    onChange={(e) => setFormContent(e.target.value)}
+                    className="flex-1 min-h-[300px] font-mono text-sm bg-white dark:bg-[#101922] border border-gray-300 dark:border-[#2f455a] rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary outline-none transition-all resize-none"
+                    placeholder={`---
+name: Git Expert
+description: Handles advanced git operations
+triggers: ["git", "commit", "merge"]
+---
+
+# Instructions
+When the user asks for git operations...`}
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 border-t border-gray-200 dark:border-[#2f455a] flex justify-end gap-3 bg-gray-50 dark:bg-[#1c2a38] rounded-b-xl">
+                {editingSkill && (
+                  <button
+                    onClick={handleDeleteSkill}
+                    className="mr-auto px-4 py-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 text-sm font-bold transition-colors"
+                  >
+                    Delete
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#2f455a] text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveSkill}
+                  disabled={!formName.trim() || !formContent.trim()}
+                  className="px-4 py-2 rounded-lg bg-primary hover:bg-blue-600 text-white text-sm font-bold shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Save Skill
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </main >
   );
 };
 

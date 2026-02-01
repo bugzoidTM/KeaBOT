@@ -63,15 +63,32 @@ class Agent:
         self._system_prompt = None
     
     def _get_system_prompt(self) -> str:
-        """Gera system prompt com skills summary."""
+        """Gera system prompt com skills summary e identity."""
         if self._system_prompt:
-            return self._system_prompt
+            # return self._system_prompt
+            # FORCE REFRESH for now to allow dynamic updates
+            pass
         
         skills_summary = ""
+        identity_content = ""
+
         if self.skill_manager:
             skills_summary = self.skill_manager.get_skills_summary()
+            
+            # Tenta carregar identidade customizada
+            # Procura por skill com nome "Core Identity" ou slug "core_identity"
+            identity_skill = None
+            for s in self.skill_manager.skills.values():
+                if s.name == "Core Identity" or s._slug() == "core_identity":
+                    identity_skill = s
+                    break
+            
+            if identity_skill:
+                # Garante que conteúdo está carregado
+                self.skill_manager.load_skill_content(identity_skill)
+                identity_content = identity_skill.content
         
-        self._system_prompt = get_system_prompt(skills_summary)
+        self._system_prompt = get_system_prompt(skills_summary, identity_content)
         return self._system_prompt
     
     def _is_skill_call(self, tool_name: str) -> bool:

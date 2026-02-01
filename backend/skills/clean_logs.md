@@ -1,17 +1,4 @@
----
-name: Clean Logs
-description: Encontra e remove arquivos de log antigos para liberar espaço em disco
-triggers:
-  - limpar logs
-  - clean logs
-  - remover logs antigos
-  - delete old logs
-  - liberar espaço
-author: KeaBot
-version: "1.0"
----
-
-# 🧹 Skill: Limpeza de Arquivos de Log
+# 🧹 Skill: Limpeza de Arquivos de Logs
 
 ## Objetivo
 Esta skill ensina você a encontrar e remover arquivos `.log` antigos de forma segura.
