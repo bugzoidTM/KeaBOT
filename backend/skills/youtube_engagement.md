@@ -1,26 +1,39 @@
 ---
 name: YouTube Engagement
-description: Analisa vídeos do YouTube e gera comentários de engajamento
-triggers: ["youtube", "video", "transcrição", "assistir"]
+description: Analisa vídeos do YouTube (metadados, transcrição ou áudio real) e gera comentários autênticos.
+triggers: ["youtube", "video", "transcrição", "assistir", "resumir vídeo"]
 ---
 
 # Instruções
 
-Sempre que o usuário fornecer uma URL do YouTube ou pedir para analisar um vídeo:
+Quando o usuário pedir para analisar um vídeo do YouTube:
 
-1.  Use a tool `youtube` para obter os detalhes e a transcrição do vídeo.
-2.  Analise o conteúdo da transcrição (resumo, pontos principais, tom).
-3.  Gere um comentário que prove que você "assistiu" ao vídeo. O comentário deve:
-    *   Mencionar um ponto específico do meio ou fim do vídeo.
-    *   Ser construtivo e engajado.
-    *   Não soar genérico (evite "Bom vídeo", "Gostei").
-    *   Se apropriado, faça uma pergunta sobre o conteúdo.
+1.  **Chame a tool** `youtube(url="...")`.
+    *   A tool tentará obter a transcrição automaticamente.
+    *   Se não houver legendas, a tool baixará o áudio e usará o "Ouvido Biônico" (IA Multimodal) para escutar o vídeo. Isso pode levar alguns segundos a mais.
 
-## Exemplo de fluxo
+2.  **Analise o retorno**:
+    *   Se `source` for "transcript", você tem o texto exato.
+    *   Se `source` for "audio_analysis", você tem um resumo gerado pela IA que ouviu o vídeo, contendo timestamps.
 
-**Usuário:** "O que você acha desse vídeo? https://youtu.be/..."
+3.  **Gere o Comentário/Resposta**:
+    *   **Prove que assistiu**: Cite algo específico que foi dito e o momento aproximado (ex: "Interessante o que você disse sobre X no minuto 3:45").
+    *   **Seja Autêntico**: Evite respostas genéricas. Reaja ao conteúdo emocional ou técnico do vídeo.
+    *   **Contexto**: Use o título e a descrição retornados nos metadados para entender o contexto geral.
+
+## Exemplo
+
+**Usuário:** "Analise este vídeo: https://youtu.be/..."
+
+**Tool Return:**
+```json
+{
+  "title": "Tutorial React Avançado",
+  "source": "audio_analysis",
+  "content": "[02:15] O apresentador explica que `useMemo` não deve ser usado prematuramente...",
+  "metadata": {...}
+}
+```
 
 **KeaBot:**
-1.  Chama `youtube(url="...")`
-2.  Lê título e transcrição.
-3.  Responde: "Achei a técnica de misturar a farinha aos poucos (mencionada aos 5:00) muito interessante! Isso evita grumos mesmo sem batedeira? Ótimo tutorial."
+"Assisti ao tutorial! Muito boa a explicação sobre o `useMemo` por volta dos 2 minutos. Muita gente realmente usa isso errado sem medir a performance antes. Você acha que o compiler do React 19 vai tornar isso obsoleto?"
