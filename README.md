@@ -149,3 +149,5 @@ O KeaBot roda localmente na sua máquina com permissões reais.
 ## 📄 Licença
 
 Distribuído sob a licença MIT. Veja `LICENSE` para mais informações.
+
+By @BugZoidTM
