@@ -28,6 +28,7 @@ async def lifespan(app: FastAPI):
     # Import tools to trigger registration
     import app.tools.filesystem  # noqa: F401
     import app.tools.browser     # noqa: F401
+    import app.tools.youtube     # noqa: F401
     
     # Initialize Skills System
     from app.skills import init_skills

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # API Keys
     gemini_api_key: str = Field(default="", description="Google Gemini API Key")
     openai_api_key: str = Field(default="", description="OpenAI API Key")
+    youtube_api_key: str = Field(default="", description="YouTube Data API Key")
     
     # Model names
     gemini_model: str = Field(default="gemini-2.0-flash", description="Gemini model name")
