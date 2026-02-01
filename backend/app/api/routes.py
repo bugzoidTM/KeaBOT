@@ -89,7 +89,9 @@ async def chat(request: ChatRequest):
     )
     
     # Executa agente
-    agent = Agent(provider=provider) if provider else get_agent()
+    from app.main import get_skill_manager
+    skill_manager = get_skill_manager()
+    agent = Agent(provider=provider, skill_manager=skill_manager) if provider else get_agent(skill_manager)
     response = await agent.run(request.message, state)
     
     # Salva mensagens no memory
@@ -136,7 +138,9 @@ async def chat_stream(request: ChatRequest):
         visited_files=set(memory.visited_files)
     )
     
-    agent = Agent(provider=provider) if provider else get_agent()
+    from app.main import get_skill_manager
+    skill_manager = get_skill_manager()
+    agent = Agent(provider=provider, skill_manager=skill_manager) if provider else get_agent(skill_manager)
     
     async def event_generator():
         """Gera eventos SSE."""
@@ -165,8 +169,21 @@ async def chat_stream(request: ChatRequest):
             yield f"data: {json.dumps({'session_id': memory.session_id})}\n\n"
             
         except Exception as e:
-            yield f"event: error\n"
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            error_msg = str(e)
+            # Detecta erros comuns e traduz para mensagens amigáveis
+            if "API key" in error_msg or "api_key" in error_msg.lower():
+                friendly_msg = "🔑 **API Key não configurada!**\n\nPor favor, configure sua chave no arquivo `backend/.env`:\n```\nGEMINI_API_KEY=sua_chave_aqui\n```\n\nObtenha sua chave em: https://aistudio.google.com/"
+            elif "quota" in error_msg.lower() or "rate limit" in error_msg.lower():
+                friendly_msg = "⏳ **Limite de requisições atingido!**\n\nAguarde alguns minutos antes de tentar novamente."
+            elif "connection" in error_msg.lower() or "network" in error_msg.lower():
+                friendly_msg = "🌐 **Erro de conexão!**\n\nVerifique sua conexão com a internet."
+            else:
+                friendly_msg = f"😅 **Ops! Algo deu errado:**\n\n`{error_msg}`"
+            
+            yield f"event: content\n"
+            yield f"data: {json.dumps(friendly_msg, ensure_ascii=False)}\n\n"
+            yield f"event: done\n"
+            yield f"data: {json.dumps({'error': True})}\n\n"
     
     return StreamingResponse(
         event_generator(),
@@ -216,7 +233,86 @@ async def get_system_settings():
     )
 
 
+# Runtime config storage (in-memory, per session)
+_runtime_config = {
+    "api_key": None,
+    "provider": None,
+    "model": None,
+}
+
+
+class ConfigUpdateRequest(BaseModel):
+    """Request para atualizar configurações."""
+    api_key: Optional[str] = None
+    provider: Optional[str] = Field(None, description="gemini or openai")
+    model: Optional[str] = None
+
+
+class ConfigResponse(BaseModel):
+    """Resposta de configuração."""
+    provider: str
+    model: str
+    has_api_key: bool
+    api_key_source: str  # "runtime" or "env"
+
+
+@router.post("/config")
+async def update_config(request: ConfigUpdateRequest):
+    """
+    Atualiza configurações em runtime.
+    API keys são mantidas apenas em memória por segurança.
+    """
+    if request.api_key:
+        _runtime_config["api_key"] = request.api_key
+    if request.provider:
+        _runtime_config["provider"] = request.provider
+    if request.model:
+        _runtime_config["model"] = request.model
+    
+    return {
+        "success": True,
+        "message": "Configurações atualizadas!",
+        "config": {
+            "provider": _runtime_config["provider"] or get_settings().llm_provider,
+            "model": _runtime_config["model"] or get_settings().gemini_model,
+            "has_api_key": bool(_runtime_config["api_key"]),
+        }
+    }
+
+
+@router.get("/config", response_model=ConfigResponse)
+async def get_config():
+    """Retorna configuração atual."""
+    settings = get_settings()
+    
+    has_runtime_key = bool(_runtime_config["api_key"])
+    has_env_key = bool(settings.gemini_api_key and settings.gemini_api_key != "your_gemini_api_key_here")
+    
+    return ConfigResponse(
+        provider=_runtime_config["provider"] or settings.llm_provider,
+        model=_runtime_config["model"] or settings.gemini_model,
+        has_api_key=has_runtime_key or has_env_key,
+        api_key_source="runtime" if has_runtime_key else ("env" if has_env_key else "none")
+    )
+
+
+def get_runtime_api_key() -> str | None:
+    """Retorna API key do runtime ou None."""
+    return _runtime_config.get("api_key")
+
+
+def get_runtime_provider() -> str | None:
+    """Retorna provider do runtime ou None."""
+    return _runtime_config.get("provider")
+
+
+def get_runtime_model() -> str | None:
+    """Retorna model do runtime ou None."""
+    return _runtime_config.get("model")
+
+
 @router.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "keabot-backend"}
+

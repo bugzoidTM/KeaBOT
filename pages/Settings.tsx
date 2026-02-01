@@ -1,34 +1,119 @@
-import React, { useState } from 'react';
-import { AppSettings, LLMProvider } from '../types';
+import React, { useState, useEffect } from 'react';
+import { getConfig, updateConfig } from '../services/apiService';
+
+// Simplified provider type for actual backend
+type Provider = 'gemini' | 'openai';
+
+interface ConfigState {
+  provider: Provider;
+  model: string;
+  apiKey: string;
+  hasApiKey: boolean;
+  apiKeySource: string;
+}
 
 const SettingsPage: React.FC = () => {
-  const [settings, setSettings] = useState<AppSettings>({
-    provider: LLMProvider.Google,
-    model: 'gemini-1.5-pro',
-    temperature: 0.7,
-    topP: 1.0,
-    systemPrompt: '',
-    storeHistory: true,
-    anonymizePII: false
+  const [config, setConfig] = useState<ConfigState>({
+    provider: 'gemini',
+    model: 'gemini-2.5-flash',
+    apiKey: '',
+    hasApiKey: false,
+    apiKeySource: 'none',
   });
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  // Load config on mount
+  useEffect(() => {
+    loadConfig();
+  }, []);
+
+  const loadConfig = async () => {
+    try {
+      setIsLoading(true);
+      const data = await getConfig();
+      setConfig(prev => ({
+        ...prev,
+        provider: data.provider as Provider,
+        model: data.model,
+        hasApiKey: data.has_api_key,
+        apiKeySource: data.api_key_source,
+      }));
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Erro ao carregar configurações' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      setMessage(null);
+
+      const updateData: { api_key?: string; provider?: string; model?: string } = {
+        provider: config.provider,
+        model: config.model,
+      };
+
+      // Only send API key if user entered one
+      if (config.apiKey) {
+        updateData.api_key = config.apiKey;
+      }
+
+      const result = await updateConfig(updateData);
+
+      if (result.success) {
+        setMessage({ type: 'success', text: '✅ ' + result.message });
+        setConfig(prev => ({
+          ...prev,
+          apiKey: '', // Clear input after save
+          hasApiKey: result.config.has_api_key,
+          apiKeySource: 'runtime',
+        }));
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: '❌ Erro ao salvar configurações' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const providers = [
-    { id: LLMProvider.OpenAI, name: 'OpenAI', desc: 'GPT-4o, GPT-3.5 Turbo', icon: 'auto_awesome' },
-    { id: LLMProvider.Anthropic, name: 'Anthropic', desc: 'Claude 3.5 Sonnet, Opus', icon: 'neurology' },
-    { id: LLMProvider.Google, name: 'Google Vertex', desc: 'Gemini 1.5 Pro', icon: 'grid_view' },
-    { id: LLMProvider.Deepseek, name: 'Deepseek', desc: 'Deepseek Coder V2', icon: 'code_blocks' },
+    { id: 'gemini' as Provider, name: 'Google Gemini', desc: 'Gemini 2.5 Flash', icon: 'grid_view' },
+    { id: 'openai' as Provider, name: 'OpenAI', desc: 'GPT-4o', icon: 'auto_awesome', disabled: true },
   ];
+
+  const models = config.provider === 'gemini'
+    ? [
+      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Recomendado)' },
+      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
+      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+    ]
+    : [
+      { id: 'gpt-4o', name: 'GPT-4o' },
+      { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
+    ];
+
+  if (isLoading) {
+    return (
+      <main className="flex-1 flex items-center justify-center bg-[#101922]">
+        <div className="text-white">Carregando configurações...</div>
+      </main>
+    );
+  }
 
   return (
     <main className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#101922]">
       <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:px-12 scroll-smooth">
-        <div className="max-w-5xl mx-auto flex flex-col gap-8 pb-24">
-          
+        <div className="max-w-4xl mx-auto flex flex-col gap-8 pb-24">
+
           {/* Breadcrumbs */}
           <div className="flex flex-wrap gap-2 text-sm">
             <span className="text-text-secondary font-medium">Settings</span>
-            <span className="text-text-secondary font-medium">/</span>
-            <span className="text-text-secondary font-medium">Engine</span>
             <span className="text-text-secondary font-medium">/</span>
             <span className="text-white font-medium">LLM Configuration</span>
           </div>
@@ -36,196 +121,154 @@ const SettingsPage: React.FC = () => {
           {/* Header */}
           <div className="flex flex-wrap justify-between items-end gap-4 border-b border-border-dark pb-6">
             <div className="flex flex-col gap-2">
-              <h1 className="text-white text-3xl md:text-4xl font-bold tracking-tight">LLM Configuration</h1>
-              <p className="text-text-secondary text-base max-w-2xl">Manage AI providers, configure API keys, and fine-tune model parameters for optimal performance.</p>
+              <h1 className="text-white text-3xl md:text-4xl font-bold tracking-tight">Configuração LLM</h1>
+              <p className="text-text-secondary text-base max-w-2xl">
+                Configure o provider de IA e sua API key. As configurações são salvas em memória.
+              </p>
             </div>
-            <div className="flex gap-3">
-              <button className="px-4 py-2 rounded-lg border border-border-dark text-white hover:bg-surface-dark transition-colors text-sm font-medium">
-                Reset Defaults
-              </button>
-              <button className="px-4 py-2 rounded-lg bg-primary hover:bg-blue-600 text-white shadow-lg shadow-blue-500/20 transition-colors text-sm font-medium flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">save</span>
-                Save Changes
-              </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="px-4 py-2 rounded-lg bg-primary hover:bg-blue-600 text-white shadow-lg shadow-blue-500/20 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[18px]">save</span>
+              {isSaving ? 'Salvando...' : 'Salvar Configurações'}
+            </button>
+          </div>
+
+          {/* Message */}
+          {message && (
+            <div className={`p-4 rounded-lg border ${message.type === 'success'
+                ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                : 'bg-red-500/10 border-red-500/30 text-red-400'
+              }`}>
+              {message.text}
+            </div>
+          )}
+
+          {/* API Key Status */}
+          <div className={`p-4 rounded-lg border ${config.hasApiKey
+              ? 'bg-green-500/10 border-green-500/30'
+              : 'bg-yellow-500/10 border-yellow-500/30'
+            }`}>
+            <div className="flex items-center gap-3">
+              <span className={`material-symbols-outlined ${config.hasApiKey ? 'text-green-400' : 'text-yellow-400'}`}>
+                {config.hasApiKey ? 'check_circle' : 'warning'}
+              </span>
+              <div>
+                <p className={`font-medium ${config.hasApiKey ? 'text-green-400' : 'text-yellow-400'}`}>
+                  {config.hasApiKey
+                    ? `API Key configurada (${config.apiKeySource === 'runtime' ? 'via Settings' : 'via .env'})`
+                    : 'API Key não configurada'}
+                </p>
+                <p className="text-text-secondary text-sm">
+                  {config.hasApiKey
+                    ? 'Você pode usar o chat normalmente.'
+                    : 'Configure sua API key abaixo para usar o chat.'}
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Providers */}
+          {/* Provider Selection */}
           <div className="flex flex-col gap-4">
             <h3 className="text-white text-lg font-bold flex items-center gap-2">
               <span className="material-symbols-outlined text-primary">dns</span>
-              Active Provider
+              Provider
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {providers.map((p) => (
-                <label 
+                <label
                   key={p.id}
                   className={`cursor-pointer relative flex flex-col gap-3 rounded-xl border p-4 transition-all
-                    ${settings.provider === p.id 
-                      ? 'border-primary bg-surface-dark shadow-md shadow-primary/10' 
+                    ${config.provider === p.id
+                      ? 'border-primary bg-surface-dark shadow-md shadow-primary/10'
                       : 'border-border-dark hover:bg-surface-dark/50'
-                    }`}
+                    }
+                    ${p.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <div className="flex justify-between items-start">
                     <div className="bg-white/10 p-2 rounded-lg">
                       <span className="material-symbols-outlined text-white">{p.icon}</span>
                     </div>
-                    <input 
-                      type="radio" 
-                      name="provider" 
-                      checked={settings.provider === p.id} 
-                      onChange={() => setSettings({...settings, provider: p.id})}
+                    <input
+                      type="radio"
+                      name="provider"
+                      checked={config.provider === p.id}
+                      onChange={() => !p.disabled && setConfig({ ...config, provider: p.id })}
+                      disabled={p.disabled}
                       className="h-5 w-5 text-primary border-border-dark bg-transparent focus:ring-0 cursor-pointer"
                     />
                   </div>
                   <div>
                     <p className="text-white font-bold">{p.name}</p>
                     <p className="text-text-secondary text-xs">{p.desc}</p>
+                    {p.disabled && <p className="text-yellow-400 text-xs mt-1">Em breve</p>}
                   </div>
                 </label>
               ))}
             </div>
           </div>
 
-          {/* Config Form */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 flex flex-col gap-6">
-              
-              {/* API Key */}
-              <div className="bg-surface-dark rounded-xl p-6 border border-border-dark/50">
-                <h3 className="text-white text-lg font-bold mb-4">Credentials</h3>
-                <div className="flex flex-col gap-2">
-                  <label className="text-text-secondary text-sm font-medium">API Key (Env Variable Loaded)</label>
-                  <div className="relative flex items-center">
-                    <span className="absolute left-3 material-symbols-outlined text-text-secondary">key</span>
-                    <input 
-                      type="password" 
-                      disabled
-                      value="sk-********************************"
-                      className="w-full bg-background-dark text-white border border-border-dark rounded-lg py-2.5 pl-10 pr-10 focus:border-primary focus:ring-1 focus:ring-primary placeholder-gray-600 transition-colors font-mono text-sm opacity-60 cursor-not-allowed"
-                    />
-                    <button className="absolute right-3 text-text-secondary hover:text-white">
-                      <span className="material-symbols-outlined text-[20px]">visibility_off</span>
-                    </button>
-                  </div>
-                  <p className="text-xs text-text-secondary mt-1">Your key is loaded securely from the environment variables.</p>
-                </div>
+          {/* API Key Input */}
+          <div className="bg-surface-dark rounded-xl p-6 border border-border-dark/50">
+            <h3 className="text-white text-lg font-bold mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">key</span>
+              API Key
+            </h3>
+            <div className="flex flex-col gap-2">
+              <label className="text-text-secondary text-sm font-medium">
+                {config.provider === 'gemini' ? 'Gemini API Key' : 'OpenAI API Key'}
+              </label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3 material-symbols-outlined text-text-secondary">key</span>
+                <input
+                  type={showApiKey ? "text" : "password"}
+                  value={config.apiKey}
+                  onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
+                  placeholder={config.hasApiKey ? "•••• (já configurada)" : "Cole sua API key aqui"}
+                  className="w-full bg-background-dark text-white border border-border-dark rounded-lg py-2.5 pl-10 pr-10 focus:border-primary focus:ring-1 focus:ring-primary placeholder-gray-600 transition-colors font-mono text-sm"
+                />
+                <button
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 text-text-secondary hover:text-white"
+                >
+                  <span className="material-symbols-outlined text-[20px]">
+                    {showApiKey ? 'visibility' : 'visibility_off'}
+                  </span>
+                </button>
               </div>
-
-              {/* Parameters */}
-              <div className="bg-surface-dark rounded-xl p-6 border border-border-dark/50 flex flex-col gap-6">
-                <h3 className="text-white text-lg font-bold">Model Parameters</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-text-secondary text-sm font-medium">Model</label>
-                    <div className="relative">
-                      <select 
-                        value={settings.model}
-                        onChange={(e) => setSettings({...settings, model: e.target.value})}
-                        className="w-full bg-background-dark text-white border border-border-dark rounded-lg py-2.5 pl-4 pr-10 focus:border-primary focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
-                      >
-                        <option value="gemini-1.5-pro">gemini-1.5-pro (Recommended)</option>
-                        <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-                      </select>
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary pointer-events-none">expand_more</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-text-secondary text-sm font-medium">Context Window</label>
-                    <div className="relative">
-                      <select className="w-full bg-background-dark text-white border border-border-dark rounded-lg py-2.5 pl-4 pr-10 focus:border-primary focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
-                        <option>128k Tokens</option>
-                        <option>32k Tokens</option>
-                      </select>
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary pointer-events-none">expand_more</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
-                  <div className="flex flex-col gap-4">
-                    <div className="flex justify-between items-center">
-                      <label className="text-text-secondary text-sm font-medium">Temperature</label>
-                      <span className="bg-background-dark text-primary px-2 py-0.5 rounded text-xs font-mono font-bold border border-border-dark">{settings.temperature}</span>
-                    </div>
-                    <input 
-                      type="range" min="0" max="1" step="0.1" 
-                      value={settings.temperature}
-                      onChange={(e) => setSettings({...settings, temperature: parseFloat(e.target.value)})}
-                      className="w-full h-1 bg-border-dark rounded-lg appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between text-xs text-text-secondary">
-                      <span>Precise</span>
-                      <span>Creative</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-4">
-                    <div className="flex justify-between items-center">
-                      <label className="text-text-secondary text-sm font-medium">Top P</label>
-                      <span className="bg-background-dark text-primary px-2 py-0.5 rounded text-xs font-mono font-bold border border-border-dark">{settings.topP}</span>
-                    </div>
-                    <input 
-                       type="range" min="0" max="1" step="0.1" 
-                       value={settings.topP}
-                       onChange={(e) => setSettings({...settings, topP: parseFloat(e.target.value)})}
-                       className="w-full h-1 bg-border-dark rounded-lg appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between text-xs text-text-secondary">
-                      <span>Focused</span>
-                      <span>Random</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2 pt-2">
-                  <label className="text-text-secondary text-sm font-medium flex justify-between">
-                     System Prompt
-                     <span className="text-xs text-primary cursor-pointer hover:underline">Load Preset</span>
-                  </label>
-                  <textarea 
-                    value={settings.systemPrompt}
-                    onChange={(e) => setSettings({...settings, systemPrompt: e.target.value})}
-                    className="w-full bg-background-dark text-white border border-border-dark rounded-lg py-3 px-4 focus:border-primary focus:ring-1 focus:ring-primary placeholder-gray-600 transition-colors text-sm leading-relaxed" 
-                    placeholder="You are KeaBOT, a helpful AI assistant..." 
-                    rows={4}
-                  />
-                </div>
-              </div>
+              <p className="text-xs text-text-secondary mt-1">
+                {config.provider === 'gemini'
+                  ? 'Obtenha sua chave em: https://aistudio.google.com/'
+                  : 'Obtenha sua chave em: https://platform.openai.com/'}
+              </p>
             </div>
+          </div>
 
-            {/* Sidebar Column */}
-            <div className="flex flex-col gap-6">
-              <div className="bg-surface-dark rounded-xl p-6 border border-border-dark/50">
-                <h3 className="text-white text-lg font-bold mb-4 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">security</span>
-                  Privacy
-                </h3>
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <p className="text-white text-sm font-medium">Store Chat History</p>
-                      <p className="text-text-secondary text-xs">Keep logs for 30 days</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" checked={settings.storeHistory} onChange={(e) => setSettings({...settings, storeHistory: e.target.checked})} className="sr-only peer" />
-                      <div className="w-11 h-6 bg-border-dark peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                    </label>
-                  </div>
-                  <hr className="border-border-dark/50"/>
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <p className="text-white text-sm font-medium">Anonymize PII</p>
-                      <p className="text-text-secondary text-xs">Mask emails & phones</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" checked={settings.anonymizePII} onChange={(e) => setSettings({...settings, anonymizePII: e.target.checked})} className="sr-only peer" />
-                      <div className="w-11 h-6 bg-border-dark peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                    </label>
-                  </div>
-                </div>
+          {/* Model Selection */}
+          <div className="bg-surface-dark rounded-xl p-6 border border-border-dark/50">
+            <h3 className="text-white text-lg font-bold mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">psychology</span>
+              Modelo
+            </h3>
+            <div className="flex flex-col gap-2">
+              <label className="text-text-secondary text-sm font-medium">Modelo ativo</label>
+              <div className="relative">
+                <select
+                  value={config.model}
+                  onChange={(e) => setConfig({ ...config, model: e.target.value })}
+                  className="w-full bg-background-dark text-white border border-border-dark rounded-lg py-2.5 pl-4 pr-10 focus:border-primary focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
+                >
+                  {models.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary pointer-events-none">expand_more</span>
               </div>
             </div>
           </div>
+
         </div>
       </div>
     </main>

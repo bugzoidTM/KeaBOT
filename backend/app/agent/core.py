@@ -1,6 +1,7 @@
 """
 KeaBot Agent - Core (ReAct Loop)
 Implementa o loop Thought -> Plan -> Action -> Observation.
+Com suporte a Skills dinâmicas.
 """
 
 import asyncio
@@ -9,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from app.agent.llm import get_provider, LLMProvider
-from app.agent.prompts import get_system_prompt
+from app.agent.prompts import get_system_prompt, get_skill_injection_prompt
 from app.tools.base import get_registry, ToolResult, ToolRegistry
 # Import filesystem to trigger registration
 import app.tools.filesystem  # noqa: F401
@@ -21,8 +22,9 @@ class AgentState:
     session_id: str
     messages: list[dict] = field(default_factory=list)
     visited_files: set[str] = field(default_factory=set)
+    activated_skills: set[str] = field(default_factory=set)
     tool_call_count: int = 0
-    max_tool_calls: int = 10  # Limite de segurança
+    max_tool_calls: int = 15  # Aumentado para suportar skills
     created_at: datetime = field(default_factory=datetime.now)
 
 
@@ -33,6 +35,7 @@ class AgentResponse:
     tool_calls: list[dict] = field(default_factory=list)
     tool_results: list[dict] = field(default_factory=list)
     thinking: str | None = None
+    activated_skills: list[str] = field(default_factory=list)
     finished: bool = True
 
 
@@ -42,8 +45,8 @@ class Agent:
     
     Implementa o loop ReAct (Reasoning + Acting):
     1. Recebe mensagem do usuário
-    2. Decide se precisa de ferramentas
-    3. Executa ferramentas se necessário
+    2. Decide se precisa de ferramentas ou skills
+    3. Executa ferramentas/skills se necessário
     4. Usa resultados para formular resposta
     5. Repete até ter resposta final
     """
@@ -51,11 +54,80 @@ class Agent:
     def __init__(
         self,
         provider: LLMProvider | None = None,
-        tools: ToolRegistry | None = None
+        tools: ToolRegistry | None = None,
+        skill_manager = None
     ):
         self.provider = provider or get_provider()
         self.tools = tools or get_registry()
-        self.system_prompt = get_system_prompt()
+        self.skill_manager = skill_manager
+        self._system_prompt = None
+    
+    def _get_system_prompt(self) -> str:
+        """Gera system prompt com skills summary."""
+        if self._system_prompt:
+            return self._system_prompt
+        
+        skills_summary = ""
+        if self.skill_manager:
+            skills_summary = self.skill_manager.get_skills_summary()
+        
+        self._system_prompt = get_system_prompt(skills_summary)
+        return self._system_prompt
+    
+    def _is_skill_call(self, tool_name: str) -> bool:
+        """Verifica se é uma chamada de skill."""
+        return tool_name.startswith("skill_")
+    
+    async def _handle_skill_activation(
+        self,
+        tool_call: dict,
+        state: AgentState
+    ) -> ToolResult:
+        """
+        Processa ativação de uma skill.
+        Carrega conteúdo completo e injeta no contexto.
+        """
+        tool_name = tool_call["name"]
+        query = tool_call["arguments"].get("query", "")
+        
+        # Extrai nome da skill (remove prefix "skill_")
+        skill_slug = tool_name[6:]  # Remove "skill_"
+        
+        # Busca skill no manager
+        if not self.skill_manager:
+            return ToolResult(
+                success=False,
+                error="Skill manager not available"
+            )
+        
+        # Encontra a skill pelo slug
+        skill = None
+        for s in self.skill_manager.skills.values():
+            if s._slug() == skill_slug:
+                skill = s
+                break
+        
+        if not skill:
+            return ToolResult(
+                success=False,
+                error=f"Skill '{skill_slug}' not found"
+            )
+        
+        # Carrega conteúdo completo (lazy loading)
+        self.skill_manager.load_skill_content(skill)
+        
+        # Marca como ativada
+        state.activated_skills.add(skill.name)
+        
+        # Retorna instruções da skill
+        return ToolResult(
+            success=True,
+            data={
+                "skill_name": skill.name,
+                "instructions": skill.content,
+                "message": f"✅ Skill '{skill.name}' ativada!\n\nSiga as instruções abaixo:\n\n{skill.content}"
+            }
+        )
     
     async def run(
         self,
@@ -67,7 +139,7 @@ class Agent:
         
         ReAct Loop:
         1. Envia mensagem + histórico para LLM
-        2. Se LLM chamar tool → executa e repete
+        2. Se LLM chamar tool/skill → executa e repete
         3. Se LLM responder texto → retorna resposta
         """
         if state is None:
@@ -82,13 +154,14 @@ class Agent:
         # Loop ReAct
         all_tool_results = []
         thinking_parts = []
+        system_prompt = self._get_system_prompt()
         
         while state.tool_call_count < state.max_tool_calls:
             # Chama LLM
             response = await self.provider.chat(
                 messages=state.messages,
                 tools=self.tools,
-                system_prompt=self.system_prompt
+                system_prompt=system_prompt
             )
             
             # Se houver tool calls, executa
@@ -108,19 +181,25 @@ class Agent:
                 
                 # Executa cada tool
                 for tool_call in response["tool_calls"]:
-                    result = await self.tools.execute(
-                        tool_call["name"],
-                        **tool_call["arguments"]
-                    )
+                    tool_name = tool_call["name"]
+                    
+                    # Verifica se é skill ou tool normal
+                    if self._is_skill_call(tool_name):
+                        result = await self._handle_skill_activation(tool_call, state)
+                    else:
+                        result = await self.tools.execute(
+                            tool_name,
+                            **tool_call["arguments"]
+                        )
                     
                     # Rastreia arquivos visitados
-                    if tool_call["name"] in ["read_file_chunk", "file_stats"]:
+                    if tool_name in ["read_file_chunk", "file_stats"]:
                         path = tool_call["arguments"].get("path", "")
                         if path:
                             state.visited_files.add(path)
                     
                     tool_result = {
-                        "tool_name": tool_call["name"],
+                        "tool_name": tool_name,
                         "tool_call_id": tool_call["id"],
                         "success": result.success,
                         "result": result.to_observation()
@@ -131,7 +210,7 @@ class Agent:
                     state.messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call["id"],
-                        "name": tool_call["name"],
+                        "name": tool_name,
                         "content": result.to_observation()
                     })
                 
@@ -151,6 +230,7 @@ class Agent:
                 content=final_content,
                 tool_results=all_tool_results,
                 thinking="\n".join(thinking_parts) if thinking_parts else None,
+                activated_skills=list(state.activated_skills),
                 finished=True
             )
         
@@ -159,6 +239,7 @@ class Agent:
             content="⚠️ Atingi o limite de operações. Por favor, seja mais específico sobre o que você precisa.",
             tool_results=all_tool_results,
             thinking="\n".join(thinking_parts) if thinking_parts else None,
+            activated_skills=list(state.activated_skills),
             finished=True
         )
     
@@ -179,6 +260,8 @@ class Agent:
             "content": message
         })
         
+        system_prompt = self._get_system_prompt()
+        
         while state.tool_call_count < state.max_tool_calls:
             # Streaming da LLM
             full_response = {"content": "", "tool_calls": []}
@@ -186,7 +269,7 @@ class Agent:
             async for chunk in self.provider.chat_stream(
                 messages=state.messages,
                 tools=self.tools,
-                system_prompt=self.system_prompt
+                system_prompt=system_prompt
             ):
                 if chunk.get("content"):
                     full_response["content"] += chunk["content"]
@@ -209,20 +292,34 @@ class Agent:
                 })
                 
                 for tool_call in full_response["tool_calls"]:
+                    tool_name = tool_call["name"]
+                    
                     yield {
                         "type": "tool_start",
                         "data": {
-                            "name": tool_call["name"],
-                            "arguments": tool_call["arguments"]
+                            "name": tool_name,
+                            "arguments": tool_call["arguments"],
+                            "is_skill": self._is_skill_call(tool_name)
                         }
                     }
                     
-                    result = await self.tools.execute(
-                        tool_call["name"],
-                        **tool_call["arguments"]
-                    )
+                    # Verifica se é skill
+                    if self._is_skill_call(tool_name):
+                        result = await self._handle_skill_activation(tool_call, state)
+                        yield {
+                            "type": "skill_activated",
+                            "data": {
+                                "name": tool_name[6:],  # Remove "skill_"
+                                "success": result.success
+                            }
+                        }
+                    else:
+                        result = await self.tools.execute(
+                            tool_name,
+                            **tool_call["arguments"]
+                        )
                     
-                    if tool_call["name"] in ["read_file_chunk", "file_stats"]:
+                    if tool_name in ["read_file_chunk", "file_stats"]:
                         path = tool_call["arguments"].get("path", "")
                         if path:
                             state.visited_files.add(path)
@@ -230,7 +327,7 @@ class Agent:
                     yield {
                         "type": "tool_end",
                         "data": {
-                            "name": tool_call["name"],
+                            "name": tool_name,
                             "success": result.success,
                             "result": result.to_observation()[:500]  # Truncate for streaming
                         }
@@ -239,7 +336,7 @@ class Agent:
                     state.messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call["id"],
-                        "name": tool_call["name"],
+                        "name": tool_name,
                         "content": result.to_observation()
                     })
                 
@@ -255,6 +352,7 @@ class Agent:
                 "type": "done",
                 "data": {
                     "visited_files": list(state.visited_files),
+                    "activated_skills": list(state.activated_skills),
                     "tool_calls": state.tool_call_count
                 }
             }
@@ -271,9 +369,15 @@ class Agent:
 _agent: Agent | None = None
 
 
-def get_agent() -> Agent:
+def get_agent(skill_manager=None) -> Agent:
     """Retorna instância singleton do agente."""
     global _agent
     if _agent is None:
-        _agent = Agent()
+        _agent = Agent(skill_manager=skill_manager)
     return _agent
+
+
+def create_agent(provider=None, tools=None, skill_manager=None) -> Agent:
+    """Cria nova instância do agente com configurações customizadas."""
+    return Agent(provider=provider, tools=tools, skill_manager=skill_manager)
+

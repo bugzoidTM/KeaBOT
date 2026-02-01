@@ -38,12 +38,25 @@ class LLMProvider(ABC):
 class GeminiProvider(LLMProvider):
     """Provider para Google Gemini API."""
     
-    def __init__(self):
+    def __init__(self, api_key: str | None = None, model: str | None = None):
         import google.generativeai as genai
         
         settings = get_settings()
-        genai.configure(api_key=settings.gemini_api_key)
-        self.model_name = settings.gemini_model
+        
+        # Tenta API key do runtime primeiro, depois do .env
+        from app.api.routes import get_runtime_api_key, get_runtime_model
+        runtime_key = get_runtime_api_key()
+        runtime_model = get_runtime_model()
+        
+        # Prioridade: parâmetro > runtime > env
+        actual_key = api_key or runtime_key or settings.gemini_api_key
+        actual_model = model or runtime_model or settings.gemini_model
+        
+        if not actual_key or actual_key == "your_gemini_api_key_here":
+            raise ValueError("API key não configurada. Configure via Settings ou no arquivo .env")
+        
+        genai.configure(api_key=actual_key)
+        self.model_name = actual_model
         self.genai = genai
     
     async def chat(
