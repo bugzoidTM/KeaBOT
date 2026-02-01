@@ -18,190 +18,134 @@
 
 ## 📖 Visão Geral
 
-KeaBot é um **Agente de Automação Local** que combina uma interface React moderna com um backend Python robusto, permitindo que uma IA execute tarefas no seu sistema de forma segura e controlada.
+KeaBot é um **Agente de Automação Local** totalmente funcional que combina uma interface React moderna com um backend Python robusto, permitindo que uma IA execute tarefas no seu sistema de forma segura e controlada. O projeto evoluiu para uma plataforma madura, suportando múltiplos provedores de LLM e gerenciamento visual de skills.
 
-### 🎯 Filosofia do Sistema
+### 🎯 Principais Funcionalidades
 
-| Princípio | Descrição |
-|-----------|-----------|
-| **Contexto Infinito via Recursividade** | A IA nunca lê arquivos inteiros. Usa ferramentas (`ls`, `grep`, `read_chunk`) para navegar e ler sob demanda. |
-| **Skills Modulares (.md)** | Capacidades estendidas via arquivos Markdown na pasta `/skills`. |
-| **Safety Layer** | Ações destrutivas exigem aprovação humana explícita. |
-| **Arquitetura Híbrida** | Backend Python (FastAPI) + Frontend React (Vite). |
+*   **Multi-Provider LLM**: Suporte integrado para **Google Gemini**, **OpenAI**, **Anthropic** e **DeepSeek**.
+*   **Gerenciamento de Skills**: Interface visual para criar, editar e excluir Skills (arquivos Markdown) que ensinam novos truques ao agente.
+*   **Automação com Segurança**: Sistema de permissões granulares onde ações críticas (como deletar arquivos ou rodar comandos shell) exigem aprovação humana.
+*   **Contexto Inteligente**: O agente navega pelo sistema de arquivos e lê apenas o necessário, mantendo o contexto eficiente.
 
 ---
 
 ## 🏗️ Arquitetura
 
+O sistema utiliza uma arquitetura híbrida moderna:
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     FRONTEND (React/Vite)                   │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │   Chat UI   │  │  File Tree  │  │  Approval Modal     │  │
+│  │   Chat UI   │  │ Skills Mgr  │  │  LLM Configuration  │  │
 │  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘  │
 └─────────┼────────────────┼────────────────────┼─────────────┘
-          │                │                    │
+          │                │ REST / WebSocket   │
           ▼                ▼                    ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                 API GATEWAY (FastAPI)                       │
-│         WebSocket + REST | SSE Streaming                    │
 └─────────────────────────┬───────────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────────┐
 │                    AGENT CORE                               │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │ Tool Router  │  │ Context Mgr  │  │  Safety Layer    │   │
-│  │  (ReAct)     │  │  (Memory)    │  │  (Human-in-Loop) │   │
+│  │  LLM Router  │  │ Skill Loader │  │  Safety Layer    │   │
+│  │ (Multi-Prov) │  │  (Markdown)  │  │  (Human-in-Loop) │   │
 │  └──────┬───────┘  └──────┬───────┘  └────────┬─────────┘   │
 └─────────┼────────────────┼────────────────────┼─────────────┘
           │                │                    │
 ┌─────────▼────────────────▼────────────────────▼─────────────┐
 │                    TOOL LAYER                               │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐    │
-│  │   FS     │ │  Shell   │ │  HTTP    │ │ Code Tools   │    │
-│  │ (ls,cat) │ │ (bash)   │ │ (fetch)  │ │ (grep,parse) │    │
+│  │   FS     │ │  Shell   │ │ Browser  │ │ Code Tools   │    │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-          │
-┌─────────▼───────────────────────────────────────────────────┐
-│                    SKILLS (/skills/*.md)                    │
-│   Instruções modulares que estendem as capacidades da IA    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🚀 Implementação (Concluída)
+## 🚀 Status do Projeto: Concluído
 
-O sistema atingiu a **Etapa 4** (Versão 4.0):
+Todas as etapas de desenvolvimento foram finalizadas:
 
-### Etapa 1: Core do Backend ✅
-- [x] Estrutura FastAPI com WebSocket
-- [x] Sistema de Tools básico (filesystem, shell)
-- [x] Integração com Gemini/OpenAI API
-- [x] Loop ReAct simples
-
-### Etapa 2: Safety Layer + Context Manager ✅
-- [x] Classificação de ações (safe/unsafe)
-- [x] Approval flow via WebSocket/SSE
-- [x] Context window infinito com chunking
-- [x] Working memory persistente
-
-### Etapa 3: Skills System ✅
-- [x] Parser de Skills (.md)
-- [x] Hot-reload de skills
-- [x] Skills built-in (git, docker, npm)
-
-### Etapa 4: Integração Frontend & Advanced Features ✅
-- [x] Streaming de mensagens (SSE)
-- [x] Browser Tool (Playwright)
-- [x] Scheduler (Agendamento de tarefas)
-- [x] Docker Containerization
+✅ **Core do Backend**: API FastAPI, WebSocket, Agent Loop (ReAct).
+✅ **Sistema de Skills**: Carregamento dinâmico, CRUD via API e UI.
+✅ **Suporte Multi-LLM**: Arquitetura plugável para Gemini, OpenAI, Anthropic, DeepSeek.
+✅ **Frontend Completo**: Chat com streaming, Gerenciamento de Skills, Configurações, File Explorer.
+✅ **Safety Layer**: Fluxo de aprovação para ações sensíveis.
 
 ---
 
 ## ⚡ Quick Start
 
 ### Pré-requisitos
-- **Docker** (Recomendado)
-- Ou: **Node.js** >= 18 + **Python** >= 3.11
-- **Gemini API Key**
+- **Node.js** >= 18
+- **Python** >= 3.11
 
-### 🐳 Via Docker (Recomendado)
-```bash
-# Crie o arquivo .env na raiz (ou altere docker-compose.yml)
-# Execute:
-docker-compose up --build
-```
-Acesse: `http://localhost:3000`
+### Instalação e Execução
 
-### Manual Setup
+1.  **Backend SETUP**:
+    ```bash
+    cd backend
+    python -m venv .venv
+    .\.venv\Scripts\activate  # Windows
+    pip install -r requirements.txt
+    playwright install
+    uvicorn app.main:app --reload --port 8000
+    ```
 
-#### Frontend
-```bash
-npm install
-npm run dev
-```
+2.  **Frontend SETUP**:
+    ```bash
+    # Em outro terminal, na raiz do projeto
+    npm install
+    npm run dev
+    ```
 
-#### Backend
-```bash
-cd backend
-python -m venv .venv
-.\.venv\Scripts\activate  # Windows
-pip install -r requirements.txt
-playwright install
-uvicorn app.main:app --reload
-```
+3.  **Acesso**:
+    Abra `http://localhost:3000` no seu navegador.
 
 ---
 
-## 🔐 Variáveis de Ambiente
+## ⚙️ Configuração
 
-```env
-# .env.local
-GEMINI_API_KEY=your_gemini_key
-OPENAI_API_KEY=your_openai_key  # Opcional
-KEABOT_SAFETY_MODE=strict       # strict | permissive
-KEABOT_ALLOWED_PATHS=/home,/tmp # Paths permitidos para o agente
-```
+Você pode configurar os provedores de IA diretamente pela interface em **Settings** ou via variáveis de ambiente.
 
----
-
-## 🛡️ Safety Layer
-
-O KeaBot implementa um sistema de segurança em camadas:
-
-| Nível | Ação | Comportamento |
-|-------|------|---------------|
-| 🟢 **Safe** | `ls`, `cat`, `grep` | Executa automaticamente |
-| 🟡 **Review** | `write_file`, `mkdir` | Log + pode requerer aprovação |
-| 🔴 **Dangerous** | `rm`, `shell`, `sudo` | **Sempre** requer aprovação humana |
+**Provedores Suportados:**
+*   **Google Gemini**: Modelos Flash 2.5, Pro 2.5 (Recomendado/Default)
+*   **OpenAI**: GPT-4o
+*   **Anthropic**: Claude 3.5 Sonnet
+*   **DeepSeek**: DeepSeek V3/R1
 
 ---
 
-## 📚 Skills System
+## 📚 Criando Skills
 
-Skills são arquivos Markdown que estendem as capacidades do agente:
+Skills são a maneira de ensinar o KeaBot a realizar novas tarefas. Você pode criá-las pela interface gráfica ou adicionando arquivos `.md` na pasta `backend/skills`.
 
+**Exemplo de Skill:**
 ```markdown
-# skills/git.md
-
 ---
-name: Git Operations
-triggers: ["commit", "push", "branch", "merge"]
+name: Git Expert
+description: Realiza operações avançadas de git
+triggers: ["git", "commit", "push"]
 ---
 
-## Instruções
+# Instruções
 
-Quando o usuário pedir operações git:
-
-1. Sempre execute `git status` primeiro
-2. Nunca faça `git push --force` sem aprovação
-3. Para commits, sugira uma mensagem seguindo Conventional Commits
+Sempre verifique o status do repositório com `git status` antes de realizar commits.
+Nunca faça push em branches protegidas sem confirmação explícita.
 ```
 
 ---
 
-## 🤝 Contribuindo
+## 🛡️ Segurança
 
-1. Fork o projeto
-2. Crie sua branch (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add: AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
+O KeaBot roda localmente na sua máquina com permissões reais.
+*   **Ações Seguras** (ler arquivos, listar diretórios): Executadas automaticamente.
+*   **Ações Críticas** (escrever arquivos, rodar comandos): Podem exigir aprovação dependendo do modo de segurança configurado.
 
 ---
 
 ## 📄 Licença
 
 Distribuído sob a licença MIT. Veja `LICENSE` para mais informações.
-
----
-
-<div align="center">
-
-**Pronto para começar?** 
-
-Digite **"Etapa 1"** para iniciar a construção do Core do Backend! 🚀
-
-</div>
